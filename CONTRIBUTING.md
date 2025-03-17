@@ -22,6 +22,62 @@
    npm run dev
    ```
 
+## 打包说明
+
+### Windows 安装程序打包
+
+1. 安装打包依赖：
+
+   ```bash
+   npm install electron-builder --save-dev
+   ```
+
+2. 在 `package.json` 中添加打包配置：
+
+   ```json
+   {
+     "build": {
+       "appId": "com.logcat.app",
+       "productName": "远程服务器日志查询工具",
+       "win": {
+         "target": [
+           {
+             "target": "nsis",
+             "arch": ["x64"]
+           }
+         ],
+         "icon": "build/icon.ico"
+       },
+       "nsis": {
+         "oneClick": false,
+         "allowToChangeInstallationDirectory": true,
+         "createDesktopShortcut": true,
+         "createStartMenuShortcut": true,
+         "shortcutName": "远程服务器日志查询工具"
+       }
+     },
+     "scripts": {
+       "build:win": "electron-builder --win --x64"
+     }
+   }
+   ```
+
+3. 执行打包命令：
+
+   ```bash
+   npm run build:win
+   ```
+
+4. 打包后的安装程序将在 `dist` 目录下生成。
+
+### 注意事项
+
+- 确保已安装 Node.js 和 npm
+- Windows 打包需要在 Windows 系统下进行
+- 打包前请确保所有依赖都已正确安装
+- 建议使用 Node.js LTS 版本
+- 如遇到签名相关错误，可添加 `--publish=never` 参数
+
 ## 提交代码
 
 1. 创建新的分支：

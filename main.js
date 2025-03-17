@@ -16,7 +16,7 @@ function createWindow() {
       enableRemoteModule: false,
       sandbox: false,
       webSecurity: false,
-      preload: path.join(__dirname, "preload.js"),
+      preload: path.join(app.getAppPath(), "preload.js"),
     },
   });
   mainWindow.maximize();
