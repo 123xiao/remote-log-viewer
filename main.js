@@ -10,8 +10,6 @@ let mainWindow;
 
 function createWindow() {
   mainWindow = new BrowserWindow({
-    width: 1200,
-    height: 800,
     webPreferences: {
       nodeIntegration: true,
       contextIsolation: true,
@@ -21,6 +19,8 @@ function createWindow() {
       preload: path.join(__dirname, "preload.js"),
     },
   });
+  mainWindow.maximize();
+  //mainWindow.show();
 
   // 开发环境下连接到Vite开发服务器
   if (process.env.NODE_ENV === "development") {
@@ -167,8 +167,11 @@ ipcMain.handle("sendSSHData", async (event, data) => {
     }
   } catch (error) {
     console.error("Error writing to SSH connection:", error);
-    event.sender.send("ssh-data", "Error: Failed to send data to SSH connection\n");
-    
+    event.sender.send(
+      "ssh-data",
+      "Error: Failed to send data to SSH connection\n"
+    );
+
     // 如果发生错误，尝试清理连接
     if (activeSSHConnection) {
       activeSSHConnection.end();

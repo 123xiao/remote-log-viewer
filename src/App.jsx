@@ -172,6 +172,8 @@ const App = () => {
           fontSize: 14,
           fontFamily: 'Menlo, Monaco, "Courier New", monospace',
           lineHeight: 1.2,
+          convertEol: true,
+          scrollOnOutput: true,
         });
 
         const fitAddon = new FitAddon();
@@ -200,8 +202,6 @@ const App = () => {
       } else {
         if (terminalRef.current.fitAddon) {
           terminalRef.current.fitAddon.fit();
-        } else {
-          console.error("FitAddon is not initialized.");
         }
       }
 
@@ -214,7 +214,10 @@ const App = () => {
       window.electronAPI.removeAllListeners?.("ssh-closed");
 
       window.electronAPI.onSSHData((data) => {
-        terminalRef.current?.write(data);
+        if (terminalRef.current) {
+          terminalRef.current.write(data);
+          terminalRef.current.scrollToBottom();
+        }
       });
 
       window.electronAPI.onSSHClosed(() => {
@@ -398,7 +401,7 @@ const App = () => {
           className="terminal-container"
           style={{
             display: isConnected ? "block" : "none",
-            height: "calc(100vh - 250px)",
+            //  height: "calc(100vh - 250px)",
             marginBottom: "24px",
             padding: "0",
             overflow: "hidden",

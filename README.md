@@ -45,7 +45,7 @@
 3. 启动应用：
 
    ```bash
-   npm start
+   npm preview
    ```
 
 ## 使用指南
