@@ -10,7 +10,9 @@ import {
   message,
   Space,
   Card,
+  Spin,
 } from "antd";
+import { GithubOutlined } from "@ant-design/icons";
 import {
   PlusOutlined,
   EditOutlined,
@@ -22,8 +24,9 @@ import { FitAddon } from "xterm-addon-fit";
 import { WebLinksAddon } from "xterm-addon-web-links";
 import "xterm/css/xterm.css";
 
-const { Header, Content } = Layout;
-const { Title } = Typography;
+const { Header, Content, Footer } = Layout;
+const { Title, Text, Link } = Typography;
+//const { Title } = Typography;
 
 const App = () => {
   const [servers, setServers] = useState([]);
@@ -32,13 +35,18 @@ const App = () => {
   const [form] = Form.useForm();
   const [selectedServer, setSelectedServer] = useState(null);
   const [isConnected, setIsConnected] = useState(false);
+  const [loading, setLoading] = useState(true);
   const terminalRef = useRef(null);
   const terminalContainerRef = useRef(null);
   const sshClientRef = useRef(null);
 
   useEffect(() => {
-    loadServerConfigs();
-    initTerminal();
+    const init = async () => {
+      await loadServerConfigs();
+      initTerminal();
+      setLoading(false);
+    };
+    init();
     return () => {
       if (terminalRef.current?.cleanup) {
         terminalRef.current.cleanup();
@@ -369,149 +377,169 @@ const App = () => {
   return (
     <Layout className="app-container">
       <Header className="app-header">
-        <Title level={4} style={{ margin: "16px 0", color: "#fff" }}>
-          远程服务器日志查询工具
-        </Title>
+        <div style={{ display: "flex", alignItems: "center" }}>
+          <Title level={4} style={{ margin: "16px 0", color: "#fff" }}>
+            远程服务器日志查询工具
+          </Title>
+          <Text style={{ color: "#fff", marginLeft: "16px" }}>v1.0.0</Text>
+        </div>
       </Header>
       <Content className="app-content">
-        <div className="server-list">
-          <Space style={{ marginBottom: 16 }}>
-            <Button
-              type="primary"
-              icon={<PlusOutlined />}
-              onClick={() => showModal()}
-            >
-              添加服务器
-            </Button>
-          </Space>
-          <Table
-            columns={columns}
-            dataSource={servers}
-            rowKey="id"
-            onRow={(record) => ({
-              onClick: () => setSelectedServer(record),
-            })}
-            rowClassName={(record) =>
-              record.id === selectedServer?.id ? "ant-table-row-selected" : ""
-            }
-          />
-        </div>
-
-        <Card
-          className="terminal-container"
-          style={{
-            display: isConnected ? "block" : "none",
-            //  height: "calc(100vh - 250px)",
-            marginBottom: "24px",
-            padding: "0",
-            overflow: "hidden",
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "flex-end",
-              padding: "8px",
-              borderBottom: "1px solid #f0f0f0",
-            }}
-          >
-            <Button
-              type="primary"
-              icon={<CopyOutlined />}
-              onClick={() => {
-                if (terminalRef.current) {
-                  const buffer = terminalRef.current.buffer.active;
-                  const lines = [];
-                  for (let i = 0; i < buffer.length; i++) {
-                    const line = buffer.getLine(i);
-                    if (line) {
-                      lines.push(line.translateToString());
-                    }
-                  }
-                  const content = lines.join("\n");
-                  navigator.clipboard
-                    .writeText(content)
-                    .then(() => {
-                      message.success("复制成功");
-                    })
-                    .catch(() => {
-                      message.error("复制失败");
-                    });
-                }
-              }}
-            >
-              复制内容
-            </Button>
+        <Spin spinning={loading} tip="加载中..." size="large">
+          <div className="server-list">
+            <Space style={{ marginBottom: 16 }}>
+              <Button
+                type="primary"
+                icon={<PlusOutlined />}
+                onClick={() => showModal()}
+              >
+                添加服务器
+              </Button>
+            </Space>
+            <Table
+              columns={columns}
+              dataSource={servers}
+              rowKey="id"
+              onRow={(record) => ({
+                onClick: () => setSelectedServer(record),
+              })}
+              rowClassName={(record) =>
+                record.id === selectedServer?.id ? "ant-table-row-selected" : ""
+              }
+            />
           </div>
-          <div
-            ref={terminalContainerRef}
+
+          <Card
+            className="terminal-container"
             style={{
-              height: "calc(100% - 50px)",
-              padding: "8px",
-              backgroundColor: "#1e1e1e",
-              borderRadius: "0 0 8px 8px",
+              display: isConnected ? "block" : "none",
+              marginBottom: "24px",
+              padding: "0",
               overflow: "hidden",
             }}
-          />
-        </Card>
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "flex-end",
+                padding: "8px",
+                borderBottom: "1px solid #f0f0f0",
+              }}
+            >
+              <Button
+                type="primary"
+                icon={<CopyOutlined />}
+                onClick={() => {
+                  if (terminalRef.current) {
+                    const buffer = terminalRef.current.buffer.active;
+                    const lines = [];
+                    for (let i = 0; i < buffer.length; i++) {
+                      const line = buffer.getLine(i);
+                      if (line) {
+                        lines.push(line.translateToString());
+                      }
+                    }
+                    const content = lines.join("\n");
+                    navigator.clipboard
+                      .writeText(content)
+                      .then(() => {
+                        message.success("复制成功");
+                      })
+                      .catch(() => {
+                        message.error("复制失败");
+                      });
+                  }
+                }}
+              >
+                复制内容
+              </Button>
+            </div>
+            <div
+              ref={terminalContainerRef}
+              style={{
+                height: "calc(100% - 50px)",
+                padding: "8px",
+                backgroundColor: "#1e1e1e",
+                borderRadius: "0 0 8px 8px",
+                overflow: "hidden",
+              }}
+            />
+          </Card>
 
-        <Modal
-          title={`${editingServer ? "编辑" : "添加"}服务器配置`}
-          open={isModalVisible}
-          onOk={handleSubmit}
-          onCancel={handleCancel}
-          destroyOnClose
-        >
-          <Form form={form} layout="vertical">
-            <Form.Item
-              name="name"
-              label="服务器名称"
-              rules={[{ required: true, message: "请输入服务器名称" }]}
-            >
-              <Input />
-            </Form.Item>
-            <Form.Item
-              name="host"
-              label="主机地址"
-              rules={[{ required: true, message: "请输入主机地址" }]}
-            >
-              <Input />
-            </Form.Item>
-            <Form.Item
-              name="port"
-              label="端口"
-              initialValue="22"
-              rules={[{ required: true, message: "请输入端口号" }]}
-            >
-              <Input type="number" />
-            </Form.Item>
-            <Form.Item
-              name="username"
-              label="用户名"
-              rules={[{ required: true, message: "请输入用户名" }]}
-            >
-              <Input />
-            </Form.Item>
-            <Form.Item
-              name="password"
-              label="密码"
-              rules={[{ required: true, message: "请输入密码" }]}
-            >
-              <Input.Password />
-            </Form.Item>
-            <Form.Item
-              name="logPath"
-              label="日志路径"
-              rules={[{ required: true, message: "请输入日志路径" }]}
-            >
-              <Input />
-            </Form.Item>
-            <Form.Item name="remark" label="备注">
-              <Input.TextArea />
-            </Form.Item>
-          </Form>
-        </Modal>
+          <Modal
+            title={`${editingServer ? "编辑" : "添加"}服务器配置`}
+            open={isModalVisible}
+            onOk={handleSubmit}
+            onCancel={handleCancel}
+            destroyOnClose
+          >
+            <Form form={form} layout="vertical">
+              <Form.Item
+                name="name"
+                label="服务器名称"
+                rules={[{ required: true, message: "请输入服务器名称" }]}
+              >
+                <Input />
+              </Form.Item>
+              <Form.Item
+                name="host"
+                label="主机地址"
+                rules={[{ required: true, message: "请输入主机地址" }]}
+              >
+                <Input />
+              </Form.Item>
+              <Form.Item
+                name="port"
+                label="端口"
+                initialValue="22"
+                rules={[{ required: true, message: "请输入端口号" }]}
+              >
+                <Input type="number" />
+              </Form.Item>
+              <Form.Item
+                name="username"
+                label="用户名"
+                rules={[{ required: true, message: "请输入用户名" }]}
+              >
+                <Input />
+              </Form.Item>
+              <Form.Item
+                name="password"
+                label="密码"
+                rules={[{ required: true, message: "请输入密码" }]}
+              >
+                <Input.Password />
+              </Form.Item>
+              <Form.Item
+                name="logPath"
+                label="日志路径"
+                rules={[{ required: true, message: "请输入日志路径" }]}
+              >
+                <Input />
+              </Form.Item>
+              <Form.Item name="remark" label="备注">
+                <Input.TextArea />
+              </Form.Item>
+            </Form>
+          </Modal>
+        </Spin>
       </Content>
+      <Footer style={{ textAlign: "center" }}>
+        <Space direction="vertical">
+          <Text>
+            一个简单易用的远程服务器日志查询工具，支持实时日志查看和关键词搜索
+          </Text>
+          <Link
+            href="https://github.com/123xiao/remote-log-viewer"
+            target="_blank"
+          >
+            <Space>
+              <GithubOutlined />
+              在GitHub上查看源码
+            </Space>
+          </Link>
+        </Space>
+      </Footer>
     </Layout>
   );
 };
