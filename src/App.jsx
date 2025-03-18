@@ -255,6 +255,7 @@ const App = () => {
         terminalRef.current = null;
       }
       message.success("已断开连接");
+      window.location.reload();
     } catch (error) {
       message.error("断开连接失败: " + error.message);
     }
