@@ -377,11 +377,19 @@ const App = () => {
   return (
     <Layout className="app-container">
       <Header className="app-header">
-        <div style={{ display: "flex", alignItems: "center" }}>
-          <Title level={4} style={{ margin: "16px 0", color: "#fff" }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            width: "100%",
+          }}
+        >
+          <Title level={4} style={{ margin: "16px 0", color: "#1890ff" }}>
             远程服务器日志查询工具
           </Title>
-          <Text style={{ color: "#fff", marginLeft: "16px" }}>v1.0.0</Text>
+          <Text style={{ marginLeft: "16px", color: "#1890ff" }}>v1.0.0</Text>
+          <Text style={{ marginLeft: "16px", color: "#1890ff" }}>作者: KK</Text>
         </div>
       </Header>
       <Content className="app-content">
