@@ -77,6 +77,22 @@ const App = () => {
           lineHeight: 1.2,
         });
 
+        // 添加选中文本自动复制功能
+        terminal.onSelectionChange(() => {
+          if (terminal.hasSelection()) {
+            const selectedText = terminal.getSelection();
+            navigator.clipboard.writeText(selectedText);
+          }
+        });
+
+        // 添加右键粘贴功能
+        terminalContainerRef.current.addEventListener("contextmenu", (e) => {
+          e.preventDefault();
+          navigator.clipboard.readText().then((text) => {
+            terminal.paste(text);
+          });
+        });
+
         const fitAddon = new FitAddon();
         terminal.loadAddon(fitAddon);
         terminal.loadAddon(new WebLinksAddon());
@@ -255,7 +271,7 @@ const App = () => {
         terminalRef.current = null;
       }
       message.success("已断开连接");
-      window.location.reload();
+      location.reload();
     } catch (error) {
       message.error("断开连接失败: " + error.message);
     }
@@ -386,11 +402,11 @@ const App = () => {
             width: "100%",
           }}
         >
-          <Title level={4} style={{ margin: "16px 0", color: "#1890ff" }}>
+          <Title level={4} style={{ margin: "16px 0" }}>
             远程服务器日志查询工具
           </Title>
-          <Text style={{ marginLeft: "16px", color: "#1890ff" }}>v1.0.0</Text>
-          <Text style={{ marginLeft: "16px", color: "#1890ff" }}>作者: KK</Text>
+          <Text style={{ marginLeft: "16px" }}>v1.0.0</Text>
+          <Text style={{ marginLeft: "16px" }}>作者: KK</Text>
         </div>
       </Header>
       <Content className="app-content">
@@ -471,8 +487,35 @@ const App = () => {
                 backgroundColor: "#1e1e1e",
                 borderRadius: "0 0 8px 8px",
                 overflow: "hidden",
+                "--scrollbar-width": "8px",
+                "--scrollbar-height": "8px",
+                "--scrollbar-track-bg": "#F5F5F5",
+                "--scrollbar-thumb-bg": "#447aff",
+                "--scrollbar-thumb-hover-bg": "#2d5cd7",
               }}
+              className="custom-terminal"
             />
+            <style jsx>{`
+              .custom-terminal ::-webkit-scrollbar {
+                width: var(--scrollbar-width);
+                height: var(--scrollbar-height);
+                border-radius: 10px;
+                background-color: var(--scrollbar-track-bg);
+              }
+              .custom-terminal ::-webkit-scrollbar-track {
+                -webkit-box-shadow: inset 0 0 6px rgba(0, 0, 0, 0.3);
+                border-radius: 10px;
+                background-color: var(--scrollbar-track-bg);
+              }
+              .custom-terminal ::-webkit-scrollbar-thumb {
+                border-radius: 10px;
+                -webkit-box-shadow: inset 0 0 6px rgba(0, 0, 0, 0.3);
+                background-color: var(--scrollbar-thumb-bg);
+              }
+              .custom-terminal ::-webkit-scrollbar-thumb:hover {
+                background-color: var(--scrollbar-thumb-hover-bg);
+              }
+            `}</style>
           </Card>
 
           <Modal
