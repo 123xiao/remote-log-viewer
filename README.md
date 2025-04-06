@@ -90,3 +90,7 @@
 ---
 
 **远程服务器日志查询工具**，让您的服务器管理更轻松、更高效！
+
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=123xiao/remote-log-viewer&type=Date)](https://www.star-history.com/#123xiao/remote-log-viewer&Date)
