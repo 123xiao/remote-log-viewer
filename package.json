@@ -1,6 +1,6 @@
 {
   "name": "logcat",
-  "version": "1.0.0",
+  "version": "1.1.2",
   "description": "远程服务器日志查询工具",
   "main": "main.js",
   "scripts": {
@@ -9,7 +9,7 @@
     "build": "vite build",
     "preview": "npm run build && npm start",
     "lint": "eslint src --ext js,jsx --report-unused-disable-directives --max-warnings 0",
-    "build:win": "vite build && electron-builder --win --x64"
+    "build:win": "electron-builder --win --x64"
   },
   "dependencies": {
     "@ant-design/icons": "^5.2.6",
@@ -58,7 +58,8 @@
           ]
         }
       ],
-      "icon": "build/icon.ico"
+      "electronLanguages": ["zh-CN"],
+      "icon": "image/icon.ico"
     },
     "nsis": {
       "oneClick": false,
@@ -66,8 +67,8 @@
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "shortcutName": "远程服务器日志查询工具",
-      "installerIcon": "build/icon.ico",
-      "uninstallerIcon": "build/icon.ico"
+      "installerIcon": "image/icon.ico",
+      "uninstallerIcon": "image/icon.ico"
     },
     "electronDownload": {
       "mirror": "https://npmmirror.com/mirrors/electron/"
