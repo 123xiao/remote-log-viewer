@@ -463,7 +463,7 @@ const App = () => {
     <Title level={4} style={{ color: 'white', margin: 0 }}>
       远程服务器日志查询工具
     </Title>
-    <Text style={{ marginLeft: "16px", color: 'white' }}>v1.0.1</Text>
+    <Text style={{ marginLeft: "16px", color: 'white' }}>v1.1.2</Text>
     <Text style={{ marginLeft: "16px", color: 'white' }}>作者: KK</Text>
   </div>
   <Space>
@@ -592,7 +592,7 @@ const App = () => {
       >
         <Descriptions column={1} bordered>
           <Descriptions.Item label="项目名称">远程服务器日志查询工具</Descriptions.Item>
-          <Descriptions.Item label="版本">v1.0.1</Descriptions.Item>
+          <Descriptions.Item label="版本">v1.1.2</Descriptions.Item>
           <Descriptions.Item label="作者">KK</Descriptions.Item>
           <Descriptions.Item label="技术栈">React + Electron + Ant Design + xterm.js</Descriptions.Item>
           <Descriptions.Item label="许可证">MIT</Descriptions.Item>
