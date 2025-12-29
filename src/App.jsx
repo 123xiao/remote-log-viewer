@@ -463,7 +463,7 @@ const App = () => {
     <Title level={4} style={{ color: 'white', margin: 0 }}>
       远程服务器日志查询工具
     </Title>
-    <Text style={{ marginLeft: "16px", color: 'white' }}>v1.0.0</Text>
+    <Text style={{ marginLeft: "16px", color: 'white' }}>v1.0.1</Text>
     <Text style={{ marginLeft: "16px", color: 'white' }}>作者: KK</Text>
   </div>
   <Space>
