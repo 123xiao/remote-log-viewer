@@ -22,7 +22,7 @@ function createWindow() {
     },
   });
 
-  // mainWindow.maximize(); // 可选：启动时最大化
+   mainWindow.maximize(); // 可选：启动时最大化
 
   if (process.env.NODE_ENV === "development") {
     console.log("Running in development mode");

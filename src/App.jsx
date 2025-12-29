@@ -380,31 +380,70 @@ const App = () => {
   };
 
   const columns = [
-    { title: "服务器名称", dataIndex: "name", key: "name" },
-    { title: "主机地址", dataIndex: "host", key: "host" },
-    { title: "备注", dataIndex: "remark", key: "remark" },
+    {
+      title: "服务器名称",
+      dataIndex: "name",
+      key: "name",
+    },
+    {
+      title: "主机地址",
+      dataIndex: "host",
+      key: "host",
+    },
+    {
+      title: "端口",
+      dataIndex: "port",
+      key: "port",
+    },
+    {
+      title: "用户名",
+      dataIndex: "username",
+      key: "username",
+    },
+    {
+      title: "日志路径",
+      dataIndex: "logPath",
+      key: "logPath",
+    },
+    {
+      title: "备注",
+      dataIndex: "remark",
+      key: "remark",
+    },
     {
       title: "操作",
       key: "action",
       render: (_, record) => (
         <Space>
-          {isConnected && connectionStateRef.current.currentServerId === record.id ? (
+          {isConnected && selectedServer?.id === record.id ? (
             <Button type="primary" danger onClick={() => disconnectSSH()}>
-              断开
+              断开连接
             </Button>
           ) : (
             <Button type="primary" onClick={() => connectSSH(record)}>
               连接
             </Button>
           )}
-          <Button onClick={() => viewLiveLog(record)}>
+          <Button type="primary" onClick={() => viewLiveLog(record)}>
             实时日志
           </Button>
-          <Button onClick={() => searchLog(record)}>
-            搜索
+          <Button type="primary" onClick={() => searchLog(record)}>
+            搜索日志
           </Button>
-          <Button icon={<EditOutlined />} onClick={() => showModal(record)} />
-          <Button danger icon={<DeleteOutlined />} onClick={() => handleDelete(record.id)} />
+          <Button
+            type="primary"
+            icon={<EditOutlined />}
+            onClick={() => showModal(record)}
+          >
+            编辑
+          </Button>
+          <Button
+            danger
+            icon={<DeleteOutlined />}
+            onClick={() => handleDelete(record.id)}
+          >
+            删除
+          </Button>
         </Space>
       ),
     },
@@ -412,34 +451,46 @@ const App = () => {
 
   // 样式部分，确保终端容器可见性处理正确
   return (
-    <Layout className="app-container" style={{ height: '100vh' }}>
-      <Header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 20px' }}>
-         <Title level={4} style={{ color: 'white', margin: 0 }}>日志查询工具 v1.0.1</Title>
-         <Space>
-           <Switch 
-             checked={!disableManualCommands} 
-             onChange={(checked) => {
-               setDisableManualCommands(!checked);
-             }}
-             checkedChildren="手动命令已启用"
-             unCheckedChildren="手动命令已禁用"
+     <Layout className="app-container">
+      <Header className="app-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 20px', background: '#001529' }}>
+  <div
+    style={{
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+    }}
+  >
+    <Title level={4} style={{ color: 'white', margin: 0 }}>
+      远程服务器日志查询工具
+    </Title>
+    <Text style={{ marginLeft: "16px", color: 'white' }}>v1.0.0</Text>
+    <Text style={{ marginLeft: "16px", color: 'white' }}>作者: KK</Text>
+  </div>
+  <Space>
+    <Switch 
+      checked={!disableManualCommands} 
+      onChange={(checked) => {
+        setDisableManualCommands(!checked);
+      }}
+      checkedChildren="手动命令已启用"
+      unCheckedChildren="手动命令已禁用"
               style={{
                 marginRight: 16,
                 backgroundColor: disableManualCommands
                   ? '#52c41a' // 绿色：禁用（安全）
                   : '#ff4d4f', // 红色：启用（危险）
               }}
-           />
-           <Button 
-             type="text" 
-             icon={<InfoCircleOutlined />} 
-             onClick={() => setShowAbout(true)}
-             style={{ color: 'white' }}
-           >
-             关于
-           </Button>
-         </Space>
-      </Header>
+    />
+    <Button 
+      type="text" 
+      icon={<InfoCircleOutlined />} 
+      onClick={() => setShowAbout(true)}
+      style={{ color: 'white' }}
+    >
+      关于
+    </Button>
+  </Space>
+</Header>
       
       <Content style={{ padding: '20px', display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
         <div style={{ flex: '0 0 auto', marginBottom: 20 }}>
@@ -566,6 +617,23 @@ const App = () => {
           <p>GitHub 仓库：<a href="https://github.com/123xiao/remote-log-viewer" target="_blank">https://github.com/123xiao/remote-log-viewer</a></p>
         </div>
       </Drawer>
+      
+      <Footer style={{ textAlign: "center" }}>
+        <Space direction="vertical">
+          <Text>
+            一个简单易用的远程服务器日志查询工具，支持实时日志查看和关键词搜索
+          </Text>
+          <Link
+            href="https://github.com/123xiao/remote-log-viewer"
+            target="_blank"
+          >
+            <Space>
+              <GithubOutlined />
+              在GitHub上查看源码
+            </Space>
+          </Link>
+        </Space>
+      </Footer>
     </Layout>
   );
 };
