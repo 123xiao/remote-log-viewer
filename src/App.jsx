@@ -11,6 +11,9 @@ import {
   Space,
   Card,
   Spin,
+  Switch,
+  Drawer,
+  Descriptions
 } from "antd";
 import {
   GithubOutlined,
@@ -18,6 +21,7 @@ import {
   EditOutlined,
   DeleteOutlined,
   CopyOutlined,
+  InfoCircleOutlined,
 } from "@ant-design/icons";
 import { Terminal } from "xterm";
 import { FitAddon } from "xterm-addon-fit";
@@ -35,13 +39,20 @@ const App = () => {
   const [selectedServer, setSelectedServer] = useState(null);
   const [isConnected, setIsConnected] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [disableManualCommands, setDisableManualCommands] = useState(true); // 默认禁用
+  const [showAbout, setShowAbout] = useState(false);
 
   // Refs
   const terminalRef = useRef(null);
   const fitAddonRef = useRef(null); // 独立保存 fitAddon
   const terminalContainerRef = useRef(null);
   const resizeObserverRef = useRef(null); // 保存 ResizeObserver
-  
+
+  const disableManualCommandsRef = useRef(disableManualCommands);
+
+  useEffect(() => {
+  disableManualCommandsRef.current = disableManualCommands;
+}, [disableManualCommands]);
   // 状态锁
   const connectionStateRef = useRef({
     isConnecting: false,
@@ -148,9 +159,12 @@ const App = () => {
 
     // 事件监听：用户输入
     terminal.onData((data) => {
-        // 只有连接状态下才发送数据
-        if (connectionStateRef.current.currentServerId) {
+        // 只有连接状态下才发送数据，且未禁用手动命令
+        if (connectionStateRef.current.currentServerId && !disableManualCommandsRef.current) {
             window.electronAPI.sendSSHData(data);
+        } else if (disableManualCommandsRef.current) {
+            // 如果禁用手动命令，显示提示信息
+            terminalRef.current?.write('\r\n\x1b[33m[系统提示：手动命令已禁用]\x1b[0m\r\n');
         }
     });
 
@@ -401,6 +415,30 @@ const App = () => {
     <Layout className="app-container" style={{ height: '100vh' }}>
       <Header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 20px' }}>
          <Title level={4} style={{ color: 'white', margin: 0 }}>日志查询工具 v1.0.1</Title>
+         <Space>
+           <Switch 
+             checked={!disableManualCommands} 
+             onChange={(checked) => {
+               setDisableManualCommands(!checked);
+             }}
+             checkedChildren="手动命令已启用"
+             unCheckedChildren="手动命令已禁用"
+              style={{
+                marginRight: 16,
+                backgroundColor: disableManualCommands
+                  ? '#52c41a' // 绿色：禁用（安全）
+                  : '#ff4d4f', // 红色：启用（危险）
+              }}
+           />
+           <Button 
+             type="text" 
+             icon={<InfoCircleOutlined />} 
+             onClick={() => setShowAbout(true)}
+             style={{ color: 'white' }}
+           >
+             关于
+           </Button>
+         </Space>
       </Header>
       
       <Content style={{ padding: '20px', display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
@@ -492,6 +530,42 @@ const App = () => {
              <Form.Item name="remark" label="备注"><Input.TextArea /></Form.Item>
         </Form>
       </Modal>
+      
+      {/* 关于抽屉 */}
+      <Drawer
+        title="关于远程服务器日志查询工具"
+        placement="right"
+        onClose={() => setShowAbout(false)}
+        open={showAbout}
+        width={400}
+      >
+        <Descriptions column={1} bordered>
+          <Descriptions.Item label="项目名称">远程服务器日志查询工具</Descriptions.Item>
+          <Descriptions.Item label="版本">v1.0.1</Descriptions.Item>
+          <Descriptions.Item label="作者">KK</Descriptions.Item>
+          <Descriptions.Item label="技术栈">React + Electron + Ant Design + xterm.js</Descriptions.Item>
+          <Descriptions.Item label="许可证">MIT</Descriptions.Item>
+        </Descriptions>
+        <div style={{ marginTop: 20 }}>
+          <h4>功能特性</h4>
+          <ul>
+            <li>实时日志查看：通过 SSH 连接，实时查看远程服务器的日志输出</li>
+            <li>日志搜索：支持关键字搜索功能，快速查找日志中的相关信息</li>
+            <li>多服务器管理：轻松添加、编辑和删除服务器配置</li>
+            <li>安全控制：默认禁用手动命令，提高安全性</li>
+          </ul>
+        </div>
+        <div style={{ marginTop: 20 }}>
+          <h4>安全说明</h4>
+          <p>默认情况下，手动命令已被禁用，以防止意外操作。您可以通过顶部的开关来启用或禁用手动命令功能。</p>
+          <p>即使禁用手动命令，您仍然可以使用"实时日志"和"搜索"功能来查看服务器日志。</p>
+        </div>
+        <div style={{ marginTop: 20 }}>
+          <h4>开源信息</h4>
+          <p>本项目为开源项目，欢迎贡献代码和建议！</p>
+          <p>GitHub 仓库：<a href="https://github.com/123xiao/remote-log-viewer" target="_blank">https://github.com/123xiao/remote-log-viewer</a></p>
+        </div>
+      </Drawer>
     </Layout>
   );
 };
