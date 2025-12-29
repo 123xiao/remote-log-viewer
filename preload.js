@@ -1,26 +1,33 @@
 const { contextBridge, ipcRenderer } = require('electron');
-const NodeSSH = require('node-ssh');
-
-process.once('loaded', () => {
-  global.process = process;
-  global.Buffer = Buffer;
-});
 
 contextBridge.exposeInMainWorld('electronAPI', {
-  saveServerConfig: (config) => ipcRenderer.invoke('saveServerConfig', config),
+  // Configs
   getServerConfigs: () => ipcRenderer.invoke('getServerConfigs'),
-  deleteServerConfig: (id) => ipcRenderer.invoke('deleteServerConfig', id),
+  saveServerConfig: (config) => ipcRenderer.invoke('saveServerConfig', config),
   updateServerConfig: (config) => ipcRenderer.invoke('updateServerConfig', config),
+  deleteServerConfig: (id) => ipcRenderer.invoke('deleteServerConfig', id),
+
+  // SSH Actions
   connectSSH: (server) => ipcRenderer.invoke('connectSSH', server),
   disconnectSSH: () => ipcRenderer.invoke('disconnectSSH'),
-  sendSSHData: (data) => ipcRenderer.invoke('sendSSHData', data),
-  onSSHData: (callback) => ipcRenderer.on('ssh-data', (event, data) => callback(data)),
-  onSSHClosed: (callback) => ipcRenderer.on('ssh-closed', () => callback())
-});
+  
+  // Data Transport
+  // 发送数据使用 send (异步无阻塞)，不使用 invoke
+  sendSSHData: (data) => ipcRenderer.send('ssh-data', data),
+  
+  // [新增] 调整终端大小
+  resizeSSH: (geometry) => ipcRenderer.send('ssh-resize', geometry),
 
-contextBridge.exposeInMainWorld('process', {
-  platform: process.platform,
-  env: {
-    NODE_ENV: process.env.NODE_ENV
-  }
+  // Listeners
+  onSSHData: (callback) => {
+    const subscription = (event, data) => callback(data);
+    ipcRenderer.on('ssh-data', subscription);
+    return () => ipcRenderer.removeListener('ssh-data', subscription);
+  },
+  onSSHClosed: (callback) => {
+    const subscription = (event) => callback();
+    ipcRenderer.on('ssh-closed', subscription);
+    return () => ipcRenderer.removeListener('ssh-closed', subscription);
+  },
+  removeAllListeners: (channel) => ipcRenderer.removeAllListeners(channel)
 });

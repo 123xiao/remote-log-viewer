@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   Layout,
   Typography,
@@ -12,8 +12,8 @@ import {
   Card,
   Spin,
 } from "antd";
-import { GithubOutlined } from "@ant-design/icons";
 import {
+  GithubOutlined,
   PlusOutlined,
   EditOutlined,
   DeleteOutlined,
@@ -26,7 +26,6 @@ import "xterm/css/xterm.css";
 
 const { Header, Content, Footer } = Layout;
 const { Title, Text, Link } = Typography;
-//const { Title } = Typography;
 
 const App = () => {
   const [servers, setServers] = useState([]);
@@ -36,92 +35,146 @@ const App = () => {
   const [selectedServer, setSelectedServer] = useState(null);
   const [isConnected, setIsConnected] = useState(false);
   const [loading, setLoading] = useState(true);
-  const terminalRef = useRef(null);
-  const terminalContainerRef = useRef(null);
-  const sshClientRef = useRef(null);
 
+  // Refs
+  const terminalRef = useRef(null);
+  const fitAddonRef = useRef(null); // 独立保存 fitAddon
+  const terminalContainerRef = useRef(null);
+  const resizeObserverRef = useRef(null); // 保存 ResizeObserver
+  
+  // 状态锁
+  const connectionStateRef = useRef({
+    isConnecting: false,
+    isDisconnecting: false,
+    currentServerId: null
+  });
+
+  // 1. 初始化逻辑 (仅在组件挂载时执行一次)
   useEffect(() => {
     const init = async () => {
       await loadServerConfigs();
-      initTerminal();
+      initTerminal(); // 初始化终端实例（但不一定显示）
       setLoading(false);
     };
     init();
+
     return () => {
-      if (terminalRef.current?.cleanup) {
-        terminalRef.current.cleanup();
+      // 清理 SSH 监听
+      window.electronAPI.removeAllListeners?.("ssh-data");
+      window.electronAPI.removeAllListeners?.("ssh-closed");
+      
+      // 强制断开连接
+      disconnectSSH(true);
+      
+      // 清理 ResizeObserver
+      if (resizeObserverRef.current) {
+        resizeObserverRef.current.disconnect();
       }
-      disconnectSSH();
+
+      // 销毁终端
+      if (terminalRef.current) {
+        terminalRef.current.dispose();
+        terminalRef.current = null;
+      }
     };
   }, []);
 
-  const initTerminal = () => {
-    if (terminalContainerRef.current) {
-      if (!terminalRef.current) {
-        const terminal = new Terminal({
-          cursorBlink: true,
-          allowTransparency: true,
-          copyOnSelect: true,
-          rightClickSelectsWord: true,
-          allowProposedApi: true,
-          rightClickPaste: true,
-          theme: {
-            background: "#1e1e1e",
-            foreground: "#d4d4d4",
-          },
-          cols: 200,
-          rows: 50,
-          scrollback: 10000,
-          fontSize: 14,
-          fontFamily: 'Menlo, Monaco, "Courier New", monospace',
-          lineHeight: 1.2,
-        });
-
-        // 添加选中文本自动复制功能
-        terminal.onSelectionChange(() => {
-          if (terminal.hasSelection()) {
-            const selectedText = terminal.getSelection();
-            navigator.clipboard.writeText(selectedText);
-          }
-        });
-
-        // 添加右键粘贴功能
-        terminalContainerRef.current.addEventListener("contextmenu", (e) => {
-          e.preventDefault();
-          navigator.clipboard.readText().then((text) => {
-            terminal.paste(text);
-          });
-        });
-
-        const fitAddon = new FitAddon();
-        terminal.loadAddon(fitAddon);
-        terminal.loadAddon(new WebLinksAddon());
-
-        terminal.open(terminalContainerRef.current);
-
-        setTimeout(() => {
-          fitAddon.fit();
-        }, 0);
-
-        terminalRef.current = terminal;
-
-        const handleResize = () => {
-          fitAddon.fit();
-        };
-
-        window.addEventListener("resize", handleResize);
-
-        terminalRef.current.cleanup = () => {
-          window.removeEventListener("resize", handleResize);
-          terminal.dispose();
-        };
-      }
+  // 2. 监听显示状态变化，重新调整终端大小
+  // 关键修复：xterm 不能在 display: none 的容器中正确计算大小
+  // 当变为 block 时，必须重新 fit()
+  useEffect(() => {
+    if (isConnected && fitAddonRef.current && terminalRef.current) {
+      // 使用 setTimeout 让 DOM 渲染完成后再 fit
+      const timer = setTimeout(() => {
+        fitAddonRef.current.fit();
+        terminalRef.current.focus();
+      }, 100);
+      return () => clearTimeout(timer);
     }
+  }, [isConnected]);
+
+  // 初始化终端方法的重构
+  const initTerminal = () => {
+    // 防止重复创建
+    if (terminalRef.current) return;
+    if (!terminalContainerRef.current) return;
+
+    // 清空容器，防止 React 开发模式下的重复渲染导致追加多个 canvas
+    terminalContainerRef.current.innerHTML = '';
+
+    const terminal = new Terminal({
+      cursorBlink: true,
+      allowTransparency: true,
+      copyOnSelect: true,
+      rightClickSelectsWord: true,
+      theme: {
+        background: "#1e1e1e",
+        foreground: "#d4d4d4",
+      },
+      // 初始行列并不重要，fitAddon 会接管
+      cols: 80, 
+      rows: 24,
+      scrollback: 10000,
+      fontSize: 14,
+      fontFamily: 'Menlo, Monaco, "Courier New", monospace',
+    });
+
+    // Addons
+    const fitAddon = new FitAddon();
+    terminal.loadAddon(fitAddon);
+    terminal.loadAddon(new WebLinksAddon());
+    
+    fitAddonRef.current = fitAddon; // 保存引用
+
+    // 挂载
+    terminal.open(terminalContainerRef.current);
+    terminalRef.current = terminal;
+
+    // 事件监听：复制
+    terminal.onSelectionChange(() => {
+      if (terminal.hasSelection()) {
+        const selectedText = terminal.getSelection();
+        navigator.clipboard.writeText(selectedText).catch(() => {});
+      }
+    });
+
+    // 事件监听：右键粘贴
+    terminalContainerRef.current.addEventListener("contextmenu", (e) => {
+      e.preventDefault();
+      navigator.clipboard.readText().then((text) => {
+        terminal.paste(text);
+      }).catch(() => {});
+    });
+
+    // 事件监听：用户输入
+    terminal.onData((data) => {
+        // 只有连接状态下才发送数据
+        if (connectionStateRef.current.currentServerId) {
+            window.electronAPI.sendSSHData(data);
+        }
+    });
+
+    // 优化：使用 ResizeObserver 替代 window.resize
+    // 这样不仅窗口变化，侧边栏变化导致的容器大小变化也能捕捉到
+    const resizeObserver = new ResizeObserver(() => {
+        // 只有在显示的时候才 fit，避免报错
+        if (terminalContainerRef.current && terminalContainerRef.current.offsetParent) {
+            fitAddon.fit();
+        }
+    });
+    
+    resizeObserver.observe(terminalContainerRef.current);
+    resizeObserverRef.current = resizeObserver;
   };
 
   const loadServerConfigs = async () => {
-    const configs = await window.electronAPI.getServerConfigs();
-    setServers(configs);
+    try {
+      const configs = await window.electronAPI.getServerConfigs();
+      setServers(configs || []);
+    } catch (error) {
+      console.error('加载服务器配置失败:', error);
+      message.error('加载服务器配置失败');
+    }
   };
 
   const showModal = (server = null) => {
@@ -155,138 +208,115 @@ const App = () => {
       }
 
       message.success(`${editingServer ? "更新" : "添加"}服务器配置成功`);
-      loadServerConfigs();
+      await loadServerConfigs();
       handleCancel();
     } catch (error) {
-      message.error("表单验证失败");
+      message.error("请检查表单填写");
     }
   };
 
   const handleDelete = async (id) => {
     try {
       await window.electronAPI.deleteServerConfig(id);
-      message.success("删除服务器配置成功");
-      loadServerConfigs();
+      message.success("删除成功");
+      await loadServerConfigs();
+      
+      // 如果删除了当前连接的服务器，则断开
+      if (selectedServer && selectedServer.id === id) {
+          disconnectSSH();
+      }
     } catch (error) {
       message.error("删除失败");
     }
   };
 
   const connectSSH = async (server) => {
+    if (connectionStateRef.current.isConnecting) return;
+
+    // 如果已经在连接当前服务器，忽略
+    if (isConnected && connectionStateRef.current.currentServerId === server.id) return;
+
+    // 如果连接了其他服务器，先断开
     if (isConnected) {
       await disconnectSSH();
     }
 
+    connectionStateRef.current.isConnecting = true;
+
     try {
-      if (!terminalRef.current) {
-        const terminal = new Terminal({
-          cursorBlink: true,
-          allowTransparency: true,
-          copyOnSelect: true,
-          rightClickSelectsWord: true,
-          allowProposedApi: true,
-          rightClickPaste: true,
-          theme: {
-            background: "#1e1e1e",
-            foreground: "#d4d4d4",
-          },
-          cols: 200,
-          rows: 50,
-          scrollback: 10000,
-          fontSize: 14,
-          fontFamily: 'Menlo, Monaco, "Courier New", monospace',
-          lineHeight: 1.2,
-          convertEol: true,
-          scrollOnOutput: true,
-        });
+      // 确保终端已初始化
+      if (!terminalRef.current) initTerminal();
+      
+      // 清理终端屏幕，准备迎接新连接
+      terminalRef.current.clear(); 
+      terminalRef.current.write(`\r\nConnecting to ${server.host}...\r\n`);
 
-        const fitAddon = new FitAddon();
-        terminal.loadAddon(fitAddon);
-        terminal.loadAddon(new WebLinksAddon());
-
-        terminal.open(terminalContainerRef.current);
-
-        setTimeout(() => {
-          fitAddon.fit();
-        }, 0);
-
-        terminalRef.current = terminal;
-        terminalRef.current.fitAddon = fitAddon;
-
-        const handleResize = () => {
-          fitAddon.fit();
-        };
-
-        window.addEventListener("resize", handleResize);
-
-        terminalRef.current.cleanup = () => {
-          window.removeEventListener("resize", handleResize);
-          terminal.dispose();
-        };
-      } else {
-        if (terminalRef.current.fitAddon) {
-          terminalRef.current.fitAddon.fit();
-        }
-      }
-
+      // 建立SSH连接
       await window.electronAPI.connectSSH(server);
-      setIsConnected(true);
-      setSelectedServer(server);
-      message.success("SSH连接成功");
-
+      
+      // 移除旧的监听器，防止内存泄漏或重复处理
       window.electronAPI.removeAllListeners?.("ssh-data");
       window.electronAPI.removeAllListeners?.("ssh-closed");
 
+      // 绑定新监听器
       window.electronAPI.onSSHData((data) => {
-        if (terminalRef.current) {
-          terminalRef.current.write(data);
-          terminalRef.current.scrollToBottom();
-        }
+        terminalRef.current?.write(data);
       });
 
       window.electronAPI.onSSHClosed(() => {
         disconnectSSH();
+        terminalRef.current?.write('\r\n\x1b[31mConnection closed.\x1b[0m\r\n');
       });
 
-      terminalRef.current?.onData((data) => {
-        window.electronAPI.sendSSHData(data);
-      });
+      // 更新状态
+      setIsConnected(true);
+      setSelectedServer(server);
+      connectionStateRef.current.currentServerId = server.id;
+      message.success("已连接");
+
     } catch (error) {
+      terminalRef.current?.write(`\r\n\x1b[31mConnection failed: ${error.message}\x1b[0m\r\n`);
       message.error("连接失败: " + error.message);
       setIsConnected(false);
+      connectionStateRef.current.currentServerId = null;
+    } finally {
+      connectionStateRef.current.isConnecting = false;
     }
   };
 
-  const disconnectSSH = async () => {
+  const disconnectSSH = async (force = false) => {
+    if (connectionStateRef.current.isDisconnecting && !force) return;
+    
+    connectionStateRef.current.isDisconnecting = true;
+
     try {
+      await window.electronAPI.disconnectSSH();
+    } catch (err) {
+      console.warn("Disconnect error:", err);
+    } finally {
+      // 清理 Electron 监听器
       window.electronAPI.removeAllListeners?.("ssh-data");
       window.electronAPI.removeAllListeners?.("ssh-closed");
 
-      await window.electronAPI.disconnectSSH();
       setIsConnected(false);
       setSelectedServer(null);
-      if (terminalRef.current) {
-        terminalRef.current.clear();
-        terminalRef.current.dispose();
-        terminalRef.current = null;
-      }
-      message.success("已断开连接");
-      location.reload();
-    } catch (error) {
-      message.error("断开连接失败: " + error.message);
+      connectionStateRef.current.currentServerId = null;
+      connectionStateRef.current.isDisconnecting = false;
+      
+      // 这里不销毁终端实例，也不必清空屏幕（保留最后的日志供用户查看），
+      // 只是将状态置为断开。用户下次连接时再 clear。
+      message.info("连接已断开");
     }
   };
 
   const viewLiveLog = async (server) => {
-    try {
-      if (!isConnected || selectedServer?.id !== server.id) {
-        await connectSSH(server);
-      }
-      terminalRef.current?.clear();
-      await window.electronAPI.sendSSHData(`tail -f ${server.logPath}\n`);
-    } catch (error) {
-      message.error("查看实时日志失败: " + error.message);
+    if (connectionStateRef.current.currentServerId !== server.id) {
+       await connectSSH(server);
     }
+    // 等待一小会儿确保 SSH 连接建立后再发送命令
+    setTimeout(() => {
+        window.electronAPI.sendSSHData(`tail -f ${server.logPath}\n`);
+    }, 500);
   };
 
   const searchLog = async (server) => {
@@ -297,301 +327,171 @@ const App = () => {
         <Input
           ref={(node) => (inputRef = node)}
           placeholder="请输入搜索关键词"
+          onPressEnter={() => { /* 可以处理回车 */ }}
         />
       ),
       onOk: async () => {
         const keyword = inputRef?.input?.value;
-        if (!keyword) {
-          message.error("请输入搜索关键词");
-          return;
-        }
-        try {
-          terminalRef.current?.clear();
+        if (!keyword) return;
 
-          if (!isConnected || selectedServer?.id !== server.id) {
+        if (connectionStateRef.current.currentServerId !== server.id) {
             await connectSSH(server);
-          }
-          await window.electronAPI.sendSSHData(
-            `grep -n "${keyword}" ${server.logPath}\n`
-          );
-        } catch (error) {
-          message.error("搜索日志失败: " + error.message);
         }
+        
+        // 同样延迟发送，确保 Socket 准备好
+        setTimeout(() => {
+             // 使用 clear 防止混淆，然后 grep
+            terminalRef.current?.write('\r\n--- Search Result ---\r\n');
+            window.electronAPI.sendSSHData(`grep -n --color=always "${keyword}" ${server.logPath}\n`);
+        }, 500);
       },
     });
   };
 
+  const copyTerminalContent = () => {
+    if (!terminalRef.current) return;
+    
+    // 更好的全选复制方式
+    terminalRef.current.selectAll();
+    const content = terminalRef.current.getSelection();
+    terminalRef.current.clearSelection(); // 复制后清除选中状态
+
+    if (content) {
+      navigator.clipboard.writeText(content)
+        .then(() => message.success("已复制全部内容"))
+        .catch(() => message.error("复制失败"));
+    } else {
+      message.warning("终端内容为空");
+    }
+  };
+
   const columns = [
-    {
-      title: "服务器名称",
-      dataIndex: "name",
-      key: "name",
-    },
-    {
-      title: "主机地址",
-      dataIndex: "host",
-      key: "host",
-    },
-    {
-      title: "端口",
-      dataIndex: "port",
-      key: "port",
-    },
-    {
-      title: "用户名",
-      dataIndex: "username",
-      key: "username",
-    },
-    {
-      title: "日志路径",
-      dataIndex: "logPath",
-      key: "logPath",
-    },
-    {
-      title: "备注",
-      dataIndex: "remark",
-      key: "remark",
-    },
+    { title: "服务器名称", dataIndex: "name", key: "name" },
+    { title: "主机地址", dataIndex: "host", key: "host" },
+    { title: "备注", dataIndex: "remark", key: "remark" },
     {
       title: "操作",
       key: "action",
       render: (_, record) => (
         <Space>
-          {isConnected && selectedServer?.id === record.id ? (
+          {isConnected && connectionStateRef.current.currentServerId === record.id ? (
             <Button type="primary" danger onClick={() => disconnectSSH()}>
-              断开连接
+              断开
             </Button>
           ) : (
             <Button type="primary" onClick={() => connectSSH(record)}>
               连接
             </Button>
           )}
-          <Button type="primary" onClick={() => viewLiveLog(record)}>
+          <Button onClick={() => viewLiveLog(record)}>
             实时日志
           </Button>
-          <Button type="primary" onClick={() => searchLog(record)}>
-            搜索日志
+          <Button onClick={() => searchLog(record)}>
+            搜索
           </Button>
-          <Button
-            type="primary"
-            icon={<EditOutlined />}
-            onClick={() => showModal(record)}
-          >
-            编辑
-          </Button>
-          <Button
-            danger
-            icon={<DeleteOutlined />}
-            onClick={() => handleDelete(record.id)}
-          >
-            删除
-          </Button>
+          <Button icon={<EditOutlined />} onClick={() => showModal(record)} />
+          <Button danger icon={<DeleteOutlined />} onClick={() => handleDelete(record.id)} />
         </Space>
       ),
     },
   ];
 
+  // 样式部分，确保终端容器可见性处理正确
   return (
-    <Layout className="app-container">
-      <Header className="app-header">
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            width: "100%",
-          }}
-        >
-          <Title level={4} style={{ margin: "16px 0" }}>
-            远程服务器日志查询工具
-          </Title>
-          <Text style={{ marginLeft: "16px" }}>v1.0.0</Text>
-          <Text style={{ marginLeft: "16px" }}>作者: KK</Text>
-        </div>
+    <Layout className="app-container" style={{ height: '100vh' }}>
+      <Header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 20px' }}>
+         <Title level={4} style={{ color: 'white', margin: 0 }}>日志查询工具 v1.0.1</Title>
       </Header>
-      <Content className="app-content">
-        <Spin spinning={loading} tip="加载中..." size="large">
-          <div className="server-list">
-            <Space style={{ marginBottom: 16 }}>
-              <Button
-                type="primary"
-                icon={<PlusOutlined />}
-                onClick={() => showModal()}
-              >
+      
+      <Content style={{ padding: '20px', display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+        <div style={{ flex: '0 0 auto', marginBottom: 20 }}>
+            <Button type="primary" icon={<PlusOutlined />} onClick={() => showModal()}>
                 添加服务器
-              </Button>
-            </Space>
-            <Table
-              columns={columns}
-              dataSource={servers}
-              rowKey="id"
-              onRow={(record) => ({
-                onClick: () => setSelectedServer(record),
-              })}
-              rowClassName={(record) =>
-                record.id === selectedServer?.id ? "ant-table-row-selected" : ""
-              }
-            />
-          </div>
+            </Button>
+        </div>
 
-          <Card
-            className="terminal-container"
-            style={{
-              display: isConnected ? "block" : "none",
-              marginBottom: "24px",
-              padding: "0",
-              overflow: "hidden",
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "flex-end",
-                padding: "8px",
-                borderBottom: "1px solid #f0f0f0",
-              }}
-            >
-              <Button
-                type="primary"
-                icon={<CopyOutlined />}
-                onClick={() => {
-                  if (terminalRef.current) {
-                    const buffer = terminalRef.current.buffer.active;
-                    const lines = [];
-                    for (let i = 0; i < buffer.length; i++) {
-                      const line = buffer.getLine(i);
-                      if (line) {
-                        lines.push(line.translateToString());
-                      }
-                    }
-                    const content = lines.join("\n");
-                    navigator.clipboard
-                      .writeText(content)
-                      .then(() => {
-                        message.success("复制成功");
-                      })
-                      .catch(() => {
-                        message.error("复制失败");
-                      });
-                  }
-                }}
-              >
-                复制内容
-              </Button>
+        {/* 将布局改为 Flex 布局，
+            如果未连接：表格占满高度。
+            如果已连接：表格固定高度，终端占满剩余高度。
+         */}
+        <div style={{ 
+            display: 'flex', 
+            flexDirection: 'column', 
+            height: '100%', 
+            overflow: 'hidden',
+            gap: '16px' 
+        }}>
+            <div style={{ flex: isConnected ? '0 0 40%' : '1 1 auto', overflow: 'auto', transition: 'all 0.3s' }}>
+                <Table
+                    columns={columns}
+                    dataSource={servers}
+                    rowKey="id"
+                    pagination={false}
+                    size="small"
+                    onRow={(record) => ({
+                        onClick: () => { if(!isConnected) setSelectedServer(record) },
+                    })}
+                    rowClassName={(record) => record.id === selectedServer?.id ? "ant-table-row-selected" : ""}
+                />
             </div>
-            <div
-              ref={terminalContainerRef}
-              style={{
-                height: "calc(100% - 50px)",
-                padding: "8px",
-                backgroundColor: "#1e1e1e",
-                borderRadius: "0 0 8px 8px",
-                overflow: "hidden",
-                "--scrollbar-width": "8px",
-                "--scrollbar-height": "8px",
-                "--scrollbar-track-bg": "#F5F5F5",
-                "--scrollbar-thumb-bg": "#447aff",
-                "--scrollbar-thumb-hover-bg": "#2d5cd7",
-              }}
-              className="custom-terminal"
-            />
-            <style jsx>{`
-              .custom-terminal ::-webkit-scrollbar {
-                width: var(--scrollbar-width);
-                height: var(--scrollbar-height);
-                border-radius: 10px;
-                background-color: var(--scrollbar-track-bg);
-              }
-              .custom-terminal ::-webkit-scrollbar-track {
-                -webkit-box-shadow: inset 0 0 6px rgba(0, 0, 0, 0.3);
-                border-radius: 10px;
-                background-color: var(--scrollbar-track-bg);
-              }
-              .custom-terminal ::-webkit-scrollbar-thumb {
-                border-radius: 10px;
-                -webkit-box-shadow: inset 0 0 6px rgba(0, 0, 0, 0.3);
-                background-color: var(--scrollbar-thumb-bg);
-              }
-              .custom-terminal ::-webkit-scrollbar-thumb:hover {
-                background-color: var(--scrollbar-thumb-hover-bg);
-              }
-            `}</style>
-          </Card>
 
-          <Modal
-            title={`${editingServer ? "编辑" : "添加"}服务器配置`}
-            open={isModalVisible}
-            onOk={handleSubmit}
-            onCancel={handleCancel}
-            destroyOnClose
-          >
-            <Form form={form} layout="vertical">
-              <Form.Item
-                name="name"
-                label="服务器名称"
-                rules={[{ required: true, message: "请输入服务器名称" }]}
-              >
-                <Input />
-              </Form.Item>
-              <Form.Item
-                name="host"
-                label="主机地址"
-                rules={[{ required: true, message: "请输入主机地址" }]}
-              >
-                <Input />
-              </Form.Item>
-              <Form.Item
-                name="port"
-                label="端口"
-                initialValue="22"
-                rules={[{ required: true, message: "请输入端口号" }]}
-              >
-                <Input type="number" />
-              </Form.Item>
-              <Form.Item
-                name="username"
-                label="用户名"
-                rules={[{ required: true, message: "请输入用户名" }]}
-              >
-                <Input />
-              </Form.Item>
-              <Form.Item
-                name="password"
-                label="密码"
-                rules={[{ required: true, message: "请输入密码" }]}
-              >
-                <Input.Password />
-              </Form.Item>
-              <Form.Item
-                name="logPath"
-                label="日志路径"
-                rules={[{ required: true, message: "请输入日志路径" }]}
-              >
-                <Input />
-              </Form.Item>
-              <Form.Item name="remark" label="备注">
-                <Input.TextArea />
-              </Form.Item>
-            </Form>
-          </Modal>
-        </Spin>
+            {/* 终端容器：始终渲染 DOM，通过 display 控制显示，
+                这样可以保证 xterm 实例不被 React 销毁，从而复用实例 */}
+            <div style={{ 
+                flex: '1 1 auto', 
+                display: isConnected ? 'flex' : 'none', 
+                flexDirection: 'column',
+                minHeight: 0, // 关键：允许 flex 子元素小于内容高度以产生滚动条
+                border: '1px solid #333',
+                borderRadius: '8px',
+                overflow: 'hidden'
+            }}>
+                <div style={{ 
+                    padding: '8px', 
+                    background: '#252526', 
+                    borderBottom: '1px solid #333', 
+                    display: 'flex', 
+                    justifyContent: 'space-between' 
+                }}>
+                    <Text style={{ color: '#fff' }}>
+                        {selectedServer ? `${selectedServer.username}@${selectedServer.host}` : 'Terminal'}
+                    </Text>
+                    <Button type="text" size="small" icon={<CopyOutlined />} onClick={copyTerminalContent} style={{ color: '#fff' }}>
+                        复制全部
+                    </Button>
+                </div>
+                
+                <div 
+                    ref={terminalContainerRef} 
+                    style={{ 
+                        flex: 1, 
+                        background: '#1e1e1e', 
+                        overflow: 'hidden',
+                        padding: '4px'
+                    }} 
+                />
+            </div>
+        </div>
       </Content>
-      <Footer style={{ textAlign: "center" }}>
-        <Space direction="vertical">
-          <Text>
-            一个简单易用的远程服务器日志查询工具，支持实时日志查看和关键词搜索
-          </Text>
-          <Link
-            href="https://github.com/123xiao/remote-log-viewer"
-            target="_blank"
-          >
-            <Space>
-              <GithubOutlined />
-              在GitHub上查看源码
-            </Space>
-          </Link>
-        </Space>
-      </Footer>
+      
+      {/* Modal 代码保持不变 */}
+      <Modal
+        title={`${editingServer ? "编辑" : "添加"}服务器配置`}
+        open={isModalVisible}
+        onOk={handleSubmit}
+        onCancel={handleCancel}
+        destroyOnClose
+      >
+        <Form form={form} layout="vertical">
+             <Form.Item name="name" label="服务器名称" rules={[{ required: true }]}><Input /></Form.Item>
+             <Form.Item name="host" label="主机地址" rules={[{ required: true }]}><Input /></Form.Item>
+             <Form.Item name="port" label="端口" initialValue="22" rules={[{ required: true }]}><Input type="number" /></Form.Item>
+             <Form.Item name="username" label="用户名" rules={[{ required: true }]}><Input /></Form.Item>
+             <Form.Item name="password" label="密码" rules={[{ required: true }]}><Input.Password /></Form.Item>
+             <Form.Item name="logPath" label="日志路径" rules={[{ required: true }]}><Input /></Form.Item>
+             <Form.Item name="remark" label="备注"><Input.TextArea /></Form.Item>
+        </Form>
+      </Modal>
     </Layout>
   );
 };
