@@ -4,6 +4,7 @@ on:
   push:
     tags:
       - 'v*'  # 当推送 v 开头的标签时触发，例如 v1.0.0, v2.0.0
+  workflow_dispatch:  # 允许手动触发
 
 jobs:
   build-windows:
