@@ -37,9 +37,15 @@ jobs:
         id: get_version
         shell: bash
         run: |
-          VERSION=$(node -p "require('./package.json').version")
-          echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
-          echo "PKG_VERSION=$VERSION" >> $GITHUB_OUTPUT
+          PKG_VERSION=$(node -p "require('./package.json').version")
+          echo "PKG_VERSION=$PKG_VERSION" >> $GITHUB_OUTPUT
+          # 如果是 tag 触发，使用 tag 名称；否则使用 package.json 版本
+          if [[ $GITHUB_REF == refs/tags/* ]]; then
+            TAG_NAME=${GITHUB_REF#refs/tags/}
+          else
+            TAG_NAME="v$PKG_VERSION"
+          fi
+          echo "TAG_NAME=$TAG_NAME" >> $GITHUB_OUTPUT
 
       - name: Create Release
         id: create_release
@@ -47,8 +53,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: ${{ github.ref }}
-          release_name: Release ${{ steps.get_version.outputs.VERSION }}
+          tag_name: ${{ steps.get_version.outputs.TAG_NAME }}
+          release_name: Release ${{ steps.get_version.outputs.TAG_NAME }}
           draft: false
           prerelease: false
           body: |
@@ -72,5 +78,5 @@ jobs:
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
           asset_path: ./dist/远程服务器日志查询工具 Setup ${{ steps.get_version.outputs.PKG_VERSION }}.exe
-          asset_name: remote-log-viewer-setup-${{ steps.get_version.outputs.VERSION }}.exe
+          asset_name: remote-log-viewer-setup-${{ steps.get_version.outputs.TAG_NAME }}.exe
           asset_content_type: application/octet-stream
