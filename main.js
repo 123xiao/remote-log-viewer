@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain } = require("electron");
+const { app, BrowserWindow, ipcMain, shell } = require("electron");
 const path = require("path");
 const Store = require("electron-store");
 const { Client } = require("ssh2");
@@ -185,5 +185,15 @@ ipcMain.on("ssh-resize", (event, { cols, rows }) => {
     } catch (err) {
       // 忽略错误
     }
+  }
+});
+
+// --- [新功能] 打开外部链接 ---
+ipcMain.handle("openExternal", async (event, url) => {
+  try {
+    await shell.openExternal(url);
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
   }
 });

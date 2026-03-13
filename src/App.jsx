@@ -364,7 +364,7 @@ const App = () => {
 
   const copyTerminalContent = () => {
     if (!terminalRef.current) return;
-    
+
     // 更好的全选复制方式
     terminalRef.current.selectAll();
     const content = terminalRef.current.getSelection();
@@ -376,6 +376,44 @@ const App = () => {
         .catch(() => message.error("复制失败"));
     } else {
       message.warning("终端内容为空");
+    }
+  };
+
+  // 日志分析：复制全部日志并打开分析链接
+  const analyzeAllLogs = () => {
+    if (!terminalRef.current) return;
+
+    terminalRef.current.selectAll();
+    const content = terminalRef.current.getSelection();
+    terminalRef.current.clearSelection();
+
+    if (content) {
+      navigator.clipboard.writeText(content)
+        .then(() => {
+          window.electronAPI.openExternal("https://sql.123408.xyz/?source=clipboard");
+          message.success("已复制日志并打开分析页面");
+        })
+        .catch(() => message.error("复制失败"));
+    } else {
+      message.warning("终端内容为空");
+    }
+  };
+
+  // 选中分析：复制选中内容并打开分析链接
+  const analyzeSelectedLogs = () => {
+    if (!terminalRef.current) return;
+
+    const selectedText = terminalRef.current.getSelection();
+
+    if (selectedText && selectedText.trim()) {
+      navigator.clipboard.writeText(selectedText)
+        .then(() => {
+          window.electronAPI.openExternal("https://sql.123408.xyz/?source=clipboard");
+          message.success("已复制选中内容并打开分析页面");
+        })
+        .catch(() => message.error("复制失败"));
+    } else {
+      message.warning("请先选择要分析的日志内容");
     }
   };
 
@@ -463,7 +501,7 @@ const App = () => {
     <Title level={4} style={{ color: 'white', margin: 0 }}>
       远程服务器日志查询工具
     </Title>
-    <Text style={{ marginLeft: "16px", color: 'white' }}>v1.1.2</Text>
+    <Text style={{ marginLeft: "16px", color: 'white' }}>v2.0.0</Text>
     <Text style={{ marginLeft: "16px", color: 'white' }}>作者: KK</Text>
   </div>
   <Space>
@@ -535,19 +573,27 @@ const App = () => {
                 borderRadius: '8px',
                 overflow: 'hidden'
             }}>
-                <div style={{ 
-                    padding: '8px', 
-                    background: '#252526', 
-                    borderBottom: '1px solid #333', 
-                    display: 'flex', 
-                    justifyContent: 'space-between' 
+                <div style={{
+                    padding: '8px',
+                    background: '#252526',
+                    borderBottom: '1px solid #333',
+                    display: 'flex',
+                    justifyContent: 'space-between'
                 }}>
                     <Text style={{ color: '#fff' }}>
                         {selectedServer ? `${selectedServer.username}@${selectedServer.host}` : 'Terminal'}
                     </Text>
-                    <Button type="text" size="small" icon={<CopyOutlined />} onClick={copyTerminalContent} style={{ color: '#fff' }}>
-                        复制全部
-                    </Button>
+                    <Space>
+                        <Button type="text" size="small" icon={<CopyOutlined />} onClick={copyTerminalContent} style={{ color: '#fff' }}>
+                            复制全部
+                        </Button>
+                        <Button type="text" size="small" onClick={analyzeAllLogs} style={{ color: '#52c41a' }}>
+                            日志分析
+                        </Button>
+                        <Button type="text" size="small" onClick={analyzeSelectedLogs} style={{ color: '#1890ff' }}>
+                            选中分析
+                        </Button>
+                    </Space>
                 </div>
                 
                 <div 
@@ -592,7 +638,7 @@ const App = () => {
       >
         <Descriptions column={1} bordered>
           <Descriptions.Item label="项目名称">远程服务器日志查询工具</Descriptions.Item>
-          <Descriptions.Item label="版本">v1.1.2</Descriptions.Item>
+          <Descriptions.Item label="版本">v2.0.0</Descriptions.Item>
           <Descriptions.Item label="作者">KK</Descriptions.Item>
           <Descriptions.Item label="技术栈">React + Electron + Ant Design + xterm.js</Descriptions.Item>
           <Descriptions.Item label="许可证">MIT</Descriptions.Item>
