@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(powershell -Command \"Get-Process electron -ErrorAction SilentlyContinue | Select-Object Id, ProcessName, Path\")",
+      "Bash(powershell -Command \"Remove-Item -Path ''dist\\\\win-unpacked'' -Recurse -Force -ErrorAction Stop; Write-Host ''Successfully removed dist\\\\win-unpacked''\")",
+      "Bash(taskkill //F //IM \"Remote Log Viewer.exe\")",
+      "Bash(taskkill //F //IM \"electron.exe\")",
+      "Bash(handle dist/win-unpacked/resources/app.asar)",
+      "Bash(powershell -Command \"Start-Sleep -Seconds 2; Remove-Item -Path ''dist\\\\win-unpacked'' -Recurse -Force\")"
+    ]
+  }
+}
